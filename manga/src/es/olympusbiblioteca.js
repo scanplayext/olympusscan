@@ -9,7 +9,7 @@ const mangayomiSources = [
         "iconUrl": "https://olympusbiblioteca.com/olympus-logo-96.webp",
         "itemType": 0,
         "isNsfw": false,
-        "version": "0.1.2",
+        "version": "0.1.3",
         "dateFormat": "",
         "dateFormatLocale": "es_es",
         "pkgPath": "manga/src/es/olympusbiblioteca.js",
@@ -157,7 +157,7 @@ class DefaultExtension extends MProvider {
         return pages
             .filter(pageUrl => typeof pageUrl === "string" && pageUrl.length > 0)
             .map(pageUrl => ({
-                url: pageUrl,
+                url: this.normalizeImageUrl(pageUrl),
                 headers: this.imageHeaders()
             }));
     }
@@ -345,7 +345,7 @@ class DefaultExtension extends MProvider {
         const id = item.id ? `#${item.id}` : "";
         return {
             name: this.cleanText(item.name),
-            imageUrl: item.resolvedCover || this.bestImage(item.cover, item.cover_srcset),
+            imageUrl: item.resolvedCover || this.bestImage(item.cover, item.cover_srcset, "list"),
             link: `/series/comic-${slug}${id}`
         };
     }
@@ -369,7 +369,7 @@ class DefaultExtension extends MProvider {
 
         try {
             const manga = detailData || (await this.fetchSeriesDetail(slug)).data;
-            const cover = this.bestImage(manga.cover, manga.cover_srcset);
+            const cover = this.bestImage(manga.cover, manga.cover_srcset, "detail");
             if (cover) {
                 this.coverFallbackCache[slug] = cover;
                 return cover;
@@ -379,7 +379,7 @@ class DefaultExtension extends MProvider {
             if (firstChapterId) {
                 const chapter = await this.requestJson(`${this.source.baseUrl}/api/capitulo/${encodeURIComponent(slug)}/${encodeURIComponent(firstChapterId)}?type=comic`);
                 const pages = chapter.chapter && chapter.chapter.pages ? chapter.chapter.pages : [];
-                const firstPage = pages.find(page => typeof page === "string" && page.length > 0) || "";
+                const firstPage = this.normalizeImageUrl(pages.find(page => typeof page === "string" && page.length > 0) || "");
                 this.coverFallbackCache[slug] = firstPage;
                 return firstPage;
             }
@@ -392,31 +392,50 @@ class DefaultExtension extends MProvider {
         return "";
     }
 
-    bestImage(cover, srcset) {
+    bestImage(cover, srcset, quality) {
         if (srcset && typeof srcset === "string") {
             const urls = srcset
                 .split(",")
                 .map(value => value.trim().split(/\s+/)[0])
                 .filter(value => value && value !== "768w" && value !== "1536w");
             if (urls.length > 0) {
-                return this.upgradeCoverQuality(urls[urls.length - 1]);
+                const selected = quality === "list" ? urls[0] : urls[urls.length - 1];
+                return this.upgradeCoverQuality(selected, quality);
             }
         }
         if (cover && typeof cover === "string" && cover.trim().length > 0) {
-            return this.upgradeCoverQuality(cover.trim());
+            return this.upgradeCoverQuality(cover.trim(), quality);
         }
         return "";
     }
 
-    upgradeCoverQuality(url) {
+    upgradeCoverQuality(url, quality) {
         if (!url || typeof url !== "string") {
             return url;
         }
 
-        return url
-            .replace(/-sm\.webp(\?.*)?$/i, "-xl.webp$1")
-            .replace(/-md\.webp(\?.*)?$/i, "-xl.webp$1")
-            .replace(/-lg\.webp(\?.*)?$/i, "-xl.webp$1");
+        const target = quality === "list" ? "lg" : "xl";
+        return this.normalizeImageUrl(
+            url
+                .replace(/-sm\.webp(\?.*)?$/i, `-${target}.webp$1`)
+                .replace(/-md\.webp(\?.*)?$/i, `-${target}.webp$1`)
+                .replace(/-lg\.webp(\?.*)?$/i, `-${target}.webp$1`)
+                .replace(/-xl\.webp(\?.*)?$/i, `-${target}.webp$1`)
+        );
+    }
+
+    normalizeImageUrl(url) {
+        if (!url || typeof url !== "string") {
+            return "";
+        }
+        try {
+            return encodeURI(url)
+                .replace(/\(/g, "%28")
+                .replace(/\)/g, "%29")
+                .replace(/'/g, "%27");
+        } catch (error) {
+            return url;
+        }
     }
 
     seriesInfoFromUrl(url) {
