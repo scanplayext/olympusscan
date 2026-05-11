@@ -1,37 +1,26 @@
-# Mangayomi iOS Extensions
+# Olympus Biblioteca for Mangayomi iOS
 
-Pure JavaScript Mangayomi extensions optimized for iPhone/iOS.
+Pure JavaScript Mangayomi manga extension for `https://olympusbiblioteca.com/`.
 
-These sources do not use Dalvik, Android Proxy Server, Java, `127.0.0.1`, `localhost`, or any external proxy.
-
-## Sources
-
-- `Olympus Biblioteca`: manga/manhwa source for `https://olympusbiblioteca.com/`.
-- `Stremio Bridge Direct`: anime/video source that reads Stremio addon manifests and only exposes direct HTTP(S) streams compatible with iOS.
+This source is designed for iPhone/iOS Mangayomi. It does not use Dalvik, Android Proxy Server, Java, `127.0.0.1`, `localhost`, or any external proxy.
 
 ## Files
 
 ```text
 olympusbiblioteca/
   index.json
-  anime_index.json
   repo.json
-  anime/
-    src/
-      all/
-        stremiobridge.js
   manga/
     src/
       es/
         olympusbiblioteca.js
   tools/
     smoke-test.mjs
-    stremio-bridge-smoke-test.mjs
 ```
 
 ## Installation
 
-### Olympus Biblioteca
+### Option A: Paste as a custom JavaScript source
 
 1. Open Mangayomi on iPhone.
 2. Go to Browse or Extensions.
@@ -46,31 +35,18 @@ olympusbiblioteca/
 5. Paste the contents of `manga/src/es/olympusbiblioteca.js`.
 6. Save, enable the source, then open it from Browse.
 
-Or install it as a repository with:
+### Option B: Install as a repository
+
+1. Upload this folder to a GitHub repository or another HTTPS host.
+2. In Mangayomi on iPhone, add this raw HTTPS URL as an extension repository:
 
 ```text
 https://raw.githubusercontent.com/scanplayext/olympusscan/main/index.json
 ```
 
-### Stremio Bridge Direct
+3. Install and enable `Olympus Biblioteca`.
 
-1. Open Mangayomi on iPhone.
-2. Go to Extensions / Repositories.
-3. Add this anime repository URL:
-
-```text
-https://raw.githubusercontent.com/scanplayext/olympusscan/main/anime_index.json
-```
-
-4. Install and enable `Stremio Bridge Direct`.
-5. Open source settings:
-   - `Catalog manifest URL`: defaults to official Cinemeta, which provides movies/series metadata.
-   - `Stream manifest URLs`: paste one or more configured Stremio addon manifest URLs, separated by new lines or commas.
-6. Use the source from Browse / Anime.
-
-The bridge does not play torrents or magnets. For iOS, use Stremio addons that return direct `https://...m3u8`, `https://...mp4`, `https://...m4v`, or `https://...mov` stream URLs.
-
-## How Olympus Works
+## How It Works
 
 - Popular: reads `https://olympusbiblioteca.com/api/rankings?page=N&period=monthly_ranking`.
 - Latest updates: reads `https://olympusbiblioteca.com/api/new-chapters?page=N`.
@@ -80,17 +56,6 @@ The bridge does not play torrents or magnets. For iOS, use Stremio addons that r
 - Pages: reads `https://olympusbiblioteca.com/api/capitulo/{slug}/{chapterId}?type=comic` and returns direct WebP image URLs.
 
 The extension sends an iOS Safari user agent and image referer headers so Olympus returns real chapter images instead of bot placeholders.
-
-## How Stremio Bridge Works
-
-- Reads a Stremio manifest from `/manifest.json`.
-- Uses catalog endpoints like `/catalog/movie/top/skip=0.json`.
-- Uses meta endpoints like `/meta/movie/tt1254207.json`.
-- Builds movie entries as one playable episode and series entries as episode lists from `meta.videos`.
-- Calls configured stream addons at `/stream/{type}/{videoId}.json`.
-- Keeps only direct HTTP(S) `stream.url` values.
-- Blocks `infoHash`, magnet/torrent fields, `externalUrl`, local/private network URLs, `localhost`, and `127.0.0.1`.
-- Defaults to iOS-safe stream filtering, preferring HLS/MP4/M4V/MOV.
 
 ## Dependencies
 
@@ -102,9 +67,6 @@ Run this from the folder that contains `olympusbiblioteca`:
 
 ```bash
 node olympusbiblioteca/tools/smoke-test.mjs
-node olympusbiblioteca/tools/stremio-bridge-smoke-test.mjs
 ```
 
-The Olympus test verifies popular, latest, detail, chapter list, page image extraction, and genre/status metadata against the live site.
-
-The Stremio Bridge test verifies the anime repository metadata, blocks banned Android/local proxy patterns, and checks live Cinemeta catalog/meta endpoints.
+The test verifies popular, latest, detail, chapter list, page image extraction, and genre/status metadata against the live site.
