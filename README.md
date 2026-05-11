@@ -38,9 +38,13 @@ olympusbiblioteca/
 ### Option B: Install as a repository
 
 1. Upload this folder to a GitHub repository or another HTTPS host.
-2. Edit `index.json` and replace `sourceCodeUrl` with the raw HTTPS URL to `manga/src/es/olympusbiblioteca.js`.
-3. In Mangayomi on iPhone, add the raw HTTPS URL to `index.json` as an extension repository.
-4. Install and enable `Olympus Biblioteca`.
+2. In Mangayomi on iPhone, add this raw HTTPS URL as an extension repository:
+
+```text
+https://raw.githubusercontent.com/scanplayext/olympusscan/main/index.json
+```
+
+3. Install and enable `Olympus Biblioteca`.
 
 ## How It Works
 
