@@ -9,7 +9,7 @@ const mangayomiSources = [
         "iconUrl": "https://olympusbiblioteca.com/olympus-logo-96.webp",
         "itemType": 0,
         "isNsfw": false,
-        "version": "0.1.1",
+        "version": "0.1.2",
         "dateFormat": "",
         "dateFormatLocale": "es_es",
         "pkgPath": "manga/src/es/olympusbiblioteca.js",
@@ -24,6 +24,7 @@ class DefaultExtension extends MProvider {
         this.seriesListCache = null;
         this.seriesListCacheTime = 0;
         this.seriesListTtlMs = 1000 * 60 * 20;
+        this.coverFallbackCache = {};
         this.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
     }
 
@@ -52,7 +53,7 @@ class DefaultExtension extends MProvider {
     async getPopular(page) {
         try {
             const url = `${this.source.baseUrl}/api/rankings?page=${this.safePage(page)}&period=monthly_ranking`;
-            return this.seriesPageResult(await this.requestJson(url));
+            return await this.seriesPageResult(await this.requestJson(url));
         } catch (error) {
             return this.emptyPage();
         }
@@ -61,7 +62,7 @@ class DefaultExtension extends MProvider {
     async getLatestUpdates(page) {
         try {
             const url = `${this.source.baseUrl}/api/new-chapters?page=${this.safePage(page)}`;
-            return this.seriesPageResult(await this.requestJson(url));
+            return await this.seriesPageResult(await this.requestJson(url));
         } catch (error) {
             return this.emptyPage();
         }
@@ -79,7 +80,7 @@ class DefaultExtension extends MProvider {
                     const haystack = this.normalize(`${item.name || ""} ${item.slug || ""}`);
                     return haystack.indexOf(text) !== -1;
                 });
-                return this.arrayPageResult(filtered, currentPage, 20);
+                return await this.arrayPageResult(filtered, currentPage, 20);
             }
 
             const params = [
@@ -96,7 +97,7 @@ class DefaultExtension extends MProvider {
             }
 
             const url = `${this.source.baseUrl}/api/series?${params.join("&")}`;
-            return this.seriesPageResult(this.unwrapSeriesPage(await this.requestJson(url)));
+            return await this.seriesPageResult(this.unwrapSeriesPage(await this.requestJson(url)));
         } catch (error) {
             return this.emptyPage();
         }
@@ -126,9 +127,14 @@ class DefaultExtension extends MProvider {
         const chapters = await this.fetchChapters(slug, manga.chapter_count);
         const genres = (manga.genres || []).map(genre => this.cleanText(genre.name));
 
+        let imageUrl = this.bestImage(manga.cover, manga.cover_srcset);
+        if (!imageUrl) {
+            imageUrl = await this.resolveFallbackCover(slug, manga);
+        }
+
         return {
             name: this.cleanText(manga.name),
-            imageUrl: this.bestImage(manga.cover, manga.cover_srcset),
+            imageUrl,
             author: manga.team && manga.team.name ? this.cleanText(manga.team.name) : "Olympus",
             artist: "",
             description: this.cleanText(manga.summary),
@@ -302,19 +308,18 @@ class DefaultExtension extends MProvider {
         return json;
     }
 
-    seriesPageResult(json) {
+    async seriesPageResult(json) {
         const page = this.unwrapSeriesPage(json);
+        const items = await this.enrichCoverImages((page.data || []).filter(item => item && item.type === "comic"));
         return {
-            list: (page.data || [])
-                .filter(item => item && item.type === "comic")
-                .map(item => this.mangaFromSeries(item)),
+            list: items.map(item => this.mangaFromSeries(item)),
             hasNextPage: this.hasNextPage(page)
         };
     }
 
-    arrayPageResult(items, page, perPage) {
+    async arrayPageResult(items, page, perPage) {
         const offset = (page - 1) * perPage;
-        const slice = items.slice(offset, offset + perPage);
+        const slice = await this.enrichCoverImages(items.slice(offset, offset + perPage));
         return {
             list: slice.map(item => this.mangaFromSeries(item)),
             hasNextPage: offset + perPage < items.length
@@ -340,9 +345,51 @@ class DefaultExtension extends MProvider {
         const id = item.id ? `#${item.id}` : "";
         return {
             name: this.cleanText(item.name),
-            imageUrl: this.bestImage(item.cover, item.cover_srcset),
+            imageUrl: item.resolvedCover || this.bestImage(item.cover, item.cover_srcset),
             link: `/series/comic-${slug}${id}`
         };
+    }
+
+    async enrichCoverImages(items) {
+        for (const item of items) {
+            if (!this.bestImage(item.cover, item.cover_srcset) && item.slug) {
+                item.resolvedCover = await this.resolveFallbackCover(item.slug);
+            }
+        }
+        return items;
+    }
+
+    async resolveFallbackCover(slug, detailData) {
+        if (!slug) {
+            return "";
+        }
+        if (this.coverFallbackCache[slug] !== undefined) {
+            return this.coverFallbackCache[slug];
+        }
+
+        try {
+            const manga = detailData || (await this.fetchSeriesDetail(slug)).data;
+            const cover = this.bestImage(manga.cover, manga.cover_srcset);
+            if (cover) {
+                this.coverFallbackCache[slug] = cover;
+                return cover;
+            }
+
+            const firstChapterId = manga.first_chapter && manga.first_chapter.id ? manga.first_chapter.id : "";
+            if (firstChapterId) {
+                const chapter = await this.requestJson(`${this.source.baseUrl}/api/capitulo/${encodeURIComponent(slug)}/${encodeURIComponent(firstChapterId)}?type=comic`);
+                const pages = chapter.chapter && chapter.chapter.pages ? chapter.chapter.pages : [];
+                const firstPage = pages.find(page => typeof page === "string" && page.length > 0) || "";
+                this.coverFallbackCache[slug] = firstPage;
+                return firstPage;
+            }
+        } catch (error) {
+            this.coverFallbackCache[slug] = "";
+            return "";
+        }
+
+        this.coverFallbackCache[slug] = "";
+        return "";
     }
 
     bestImage(cover, srcset) {
@@ -358,7 +405,7 @@ class DefaultExtension extends MProvider {
         if (cover && typeof cover === "string" && cover.trim().length > 0) {
             return this.upgradeCoverQuality(cover.trim());
         }
-        return `${this.source.baseUrl}/olympus-logo-180.webp`;
+        return "";
     }
 
     upgradeCoverQuality(url) {
