@@ -9,7 +9,7 @@ const mangayomiSources = [
         "iconUrl": "https://olympusbiblioteca.com/olympus-logo-96.webp",
         "itemType": 0,
         "isNsfw": false,
-        "version": "0.1.0",
+        "version": "0.1.1",
         "dateFormat": "",
         "dateFormatLocale": "es_es",
         "pkgPath": "manga/src/es/olympusbiblioteca.js",
@@ -352,13 +352,24 @@ class DefaultExtension extends MProvider {
                 .map(value => value.trim().split(/\s+/)[0])
                 .filter(value => value && value !== "768w" && value !== "1536w");
             if (urls.length > 0) {
-                return urls[urls.length - 1];
+                return this.upgradeCoverQuality(urls[urls.length - 1]);
             }
         }
         if (cover && typeof cover === "string" && cover.trim().length > 0) {
-            return cover.trim();
+            return this.upgradeCoverQuality(cover.trim());
         }
         return `${this.source.baseUrl}/olympus-logo-180.webp`;
+    }
+
+    upgradeCoverQuality(url) {
+        if (!url || typeof url !== "string") {
+            return url;
+        }
+
+        return url
+            .replace(/-sm\.webp(\?.*)?$/i, "-xl.webp$1")
+            .replace(/-md\.webp(\?.*)?$/i, "-xl.webp$1")
+            .replace(/-lg\.webp(\?.*)?$/i, "-xl.webp$1");
     }
 
     seriesInfoFromUrl(url) {
